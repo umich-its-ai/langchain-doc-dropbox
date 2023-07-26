@@ -40,6 +40,10 @@ class DropboxLoader(BaseLoader):
                     "expire": "EXPIRE_TIMESTAMP"
                 }
 
+            To use the refresh token, optionally pass in:
+                app_key
+                app_secret
+
             One of the following:
                 folder_path: Path to a folder in the Dropbox account. If the root folder, an empty string
                 file_paths: List of paths to files in Dropbox
@@ -145,6 +149,8 @@ class DropboxLoader(BaseLoader):
         return docs
 
     def _load_file(self, dbx, file_path) -> List[Document]:
+        import dropbox
+
         file_documents = []
 
         file_extension = pathlib.Path(file_path).suffix.replace('.', '')
@@ -154,30 +160,38 @@ class DropboxLoader(BaseLoader):
             # Download file
             with tempfile.TemporaryDirectory() as temp_dir:
                 download_path = f"{temp_dir}/{file_name}"
-                # TODO: Error handling
-                # ex, dropbox.exceptions.ApiError: ApiError('aaf957b44ee54e59a4ceb556e0070d2e', DownloadError('path', LookupError('not_found', None)))
-                dbx.files_download_to_file(download_path=download_path, path=file_path)
 
-                if file_extension == "txt":
-                    file_documents = file_documents + self._load_text_file(download_path)
+                try:
+                    if file_extension == "txt":
+                        file_path = file_path + 'sdvsd'
 
-                if file_extension == "htm" or file_extension == "html":
-                    file_documents = file_documents + self._load_html_file(download_path)
+                    # TODO: Error handling
+                    # ex, dropbox.exceptions.ApiError: ApiError('aaf957b44ee54e59a4ceb556e0070d2e', DownloadError('path', LookupError('not_found', None)))
+                    dbx.files_download_to_file(download_path=download_path, path=file_path)
 
-                elif file_extension == "pdf":
-                    file_documents = file_documents + self._load_pdf_file(download_path)
+                    if file_extension == "txt":
+                        file_documents = file_documents + self._load_text_file(download_path)
 
-                elif file_extension == "docx":
-                    file_documents = file_documents + self._load_docx_file(download_path)
+                    if file_extension == "htm" or file_extension == "html":
+                        file_documents = file_documents + self._load_html_file(download_path)
 
-                elif file_extension == "xlsx" or file_extension == "xls":
-                    file_documents = file_documents + self._load_excel_file(download_path)
+                    elif file_extension == "pdf":
+                        file_documents = file_documents + self._load_pdf_file(download_path)
 
-                elif file_extension == "md":
-                    file_documents = file_documents + self._load_md_file(download_path)
+                    elif file_extension == "docx":
+                        file_documents = file_documents + self._load_docx_file(download_path)
 
-                elif file_extension == "rtf":
-                    file_documents = file_documents + self._load_rtf_file(download_path)
+                    elif file_extension == "xlsx" or file_extension == "xls":
+                        file_documents = file_documents + self._load_excel_file(download_path)
+
+                    elif file_extension == "md":
+                        file_documents = file_documents + self._load_md_file(download_path)
+
+                    elif file_extension == "rtf":
+                        file_documents = file_documents + self._load_rtf_file(download_path)
+
+                except dropbox.exceptions.DropboxException as e:
+                    self.errors.append({ "message": e.error, "file": file_path })
 
         else:
             self.invalid_files.append()
@@ -194,32 +208,35 @@ class DropboxLoader(BaseLoader):
         found_all_records = False
         file_paths = []
 
-        while found_all_records == False:
-            if files == None:
-                files = dbx.files_list_folder(folder_path,
-                    recursive=True,
-                    include_deleted=False,
-                )
-            else:
-                files = dbx.files_list_folder_continue(files.cursor)
+        try:
+            while found_all_records == False:
+                if files == None:
+                    files = dbx.files_list_folder(folder_path,
+                        recursive=True,
+                        include_deleted=False,
+                    )
+                else:
+                    files = dbx.files_list_folder_continue(files.cursor)
 
-            for file in files.entries:
-                if isinstance(file, dropbox.files.FileMetadata):
-                    file_extension = pathlib.Path(file.name).suffix.replace('.', '')
+                for file in files.entries:
+                    if isinstance(file, dropbox.files.FileMetadata):
+                        file_extension = pathlib.Path(file.name).suffix.replace('.', '')
 
-                    if file_extension in ALLOWED_EXTENSIONS:
-                        file_paths.append(file.path_lower)
+                        if file_extension in ALLOWED_EXTENSIONS:
+                            file_paths.append(file.path_lower)
 
-                    else:
-                        self.invalid_files.append(file.path_display)
+                        else:
+                            self.invalid_files.append(file.path_display)
 
-            if files.has_more == False:
-                found_all_records = True
+                if files.has_more == False:
+                    found_all_records = True
 
-        file_documents = self._load_files_from_paths(
-            dbx = dbx,
-            file_paths = file_paths
-        )
+            file_documents = self._load_files_from_paths(
+                dbx = dbx,
+                file_paths = file_paths
+            )
+        except dropbox.exceptions.DropboxException as e:
+            self.errors.append({ "message": e.error, "folder": folder_path })
 
         return file_documents
 
@@ -233,7 +250,6 @@ class DropboxLoader(BaseLoader):
             )
 
         return file_documents
-
 
     def load(self) -> List[Document]:
         """Load files."""
@@ -257,25 +273,28 @@ class DropboxLoader(BaseLoader):
             args['app_secret'] = self.auth['app_secret']
 
         # Initialize a new Dropbox object
-        with dropbox.Dropbox(
-            **args
-            # =self.token[''],
-            # oauth2_access_token_expiration=self.token['expire'],
-        ) as dbx:
-            if self.folder_path is not None:
-                return self._load_files_from_folder_path(
-                    dbx = dbx,
-                    folder_path = self.folder_path
-                )
-            elif self.file_paths is not None:
-                return self._load_files_from_paths(
-                    dbx = dbx,
-                    file_paths = self.file_paths
-                )
-            else:
-                return self._load_file(
-                    dbx = dbx,
-                    file_path = self.file_path
-                )
+        try:
+            with dropbox.Dropbox(
+                **args
+                # =self.token[''],
+                # oauth2_access_token_expiration=self.token['expire'],
+            ) as dbx:
+                if self.folder_path is not None:
+                    return self._load_files_from_folder_path(
+                        dbx = dbx,
+                        folder_path = self.folder_path
+                    )
+                elif self.file_paths is not None:
+                    return self._load_files_from_paths(
+                        dbx = dbx,
+                        file_paths = self.file_paths
+                    )
+                else:
+                    return self._load_file(
+                        dbx = dbx,
+                        file_path = self.file_path
+                    )
+        except dropbox.exceptions.DropboxException as e:
+            self.errors.append({ "message": e.error })
 
         return []

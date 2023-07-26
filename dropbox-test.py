@@ -27,3 +27,7 @@ print(documents)
 print("\nInvalid files:\n")
 print(loader.invalid_files)
 print("")
+
+print("\nErrors:\n")
+print(loader.errors)
+print("")
