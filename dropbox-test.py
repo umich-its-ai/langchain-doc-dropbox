@@ -1,13 +1,22 @@
 from dropbox_files import DropboxLoader
 
+auth = {
+	"access": "ACCESS_TOKEN_FROM_OAUTH",
+	"refresh": "REFRESH_TOKEN",
+	"id_token": "ID_TOKEN_NOT_USED",
+	"expire": "EXPIRE_TIMESTAMP"
+}
+
 loader = DropboxLoader(
-	token = "TOKEN_GOES_HERE",
-	folder_path = "/PATH_TO_FOLDER_OR_EMPTY_STRING"
-	# file_path = "/PATH/TO_FILE/File.extension"
+	auth = auth,
+	folder_path = "",
+	# file_path = "/Canvas Test Files/Sheets Test - Old.xls",
 	# file_paths = [
-	# 	"/PATH/TO_FILE/File 1.extension",
-	# 	"/PATH/TO_FILE/File 2.extension"
-	# ]
+	# 	"/Canvas Test Files/Sheets Test - Old.xls",
+	# 	"/Canvas Test Files/Index-me.docx"
+	# ],
+	# api_key = "API_KEY",
+	# api_secret = "API_SECRET",
 )
 
 documents = loader.load()
