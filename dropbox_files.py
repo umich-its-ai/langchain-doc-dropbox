@@ -28,26 +28,34 @@ ALLOWED_EXTENSIONS = [
 class DropboxLoader(BaseLoader):
     """Loading logic for Dropbox files."""
 
-    def __init__(self, token: str, folder_path: str = None, file_paths: List = None, file_path: str = None):
-        """Initialize with token.
+    def __init__(self, auth: str, app_key: str = None, app_secret: str = None, folder_path: str = None, file_paths: List = None, file_path: str = None):
+        """Initialize with auth.
 
         Args:
-            token: Dropbox token.
+            auth: Dropbox auth token dict, contains:
+                {
+                    "access": "ACCESS_TOKEN_FROM_OAUTH",
+                    "refresh": "REFRESH_TOKEN",
+                    "id_token": "ID_TOKEN_NOT_USED",
+                    "expire": "EXPIRE_TIMESTAMP"
+                }
 
             One of the following:
                 folder_path: Path to a folder in the Dropbox account. If the root folder, an empty string
                 file_paths: List of paths to files in Dropbox
                 file_path: A single file path to a file in Dropbox
         """
-        self.token = token
+        self.auth = auth
+        self.app_key = app_key
+        self.app_secret = app_secret
 
         self.folder_path = None
         self.file_paths = None
         self.file_path = None
 
-        if folder_path:
+        if folder_path is not None:
             self.folder_path = folder_path
-        elif file_paths:
+        elif file_paths is not None:
             self.file_paths = file_paths
         else:
             self.file_path = file_path
@@ -238,14 +246,28 @@ class DropboxLoader(BaseLoader):
                 "Please install it with `pip install dropbox`."
             )
 
+        args = {
+            "oauth2_access_token": self.auth['access']
+        }
+
+        # If an app_key + secret is specified, pass in refresh token, app_key, app_secret
+        if self.app_key is not None and self.app_secret is not None:
+            args['oauth2_refresh_token'] = self.auth['refresh']
+            args['app_key'] = self.auth['app_key']
+            args['app_secret'] = self.auth['app_secret']
+
         # Initialize a new Dropbox object
-        with dropbox.Dropbox(self.token) as dbx:
-            if self.folder_path:
+        with dropbox.Dropbox(
+            **args
+            # =self.token[''],
+            # oauth2_access_token_expiration=self.token['expire'],
+        ) as dbx:
+            if self.folder_path is not None:
                 return self._load_files_from_folder_path(
                     dbx = dbx,
                     folder_path = self.folder_path
                 )
-            elif self.file_paths:
+            elif self.file_paths is not None:
                 return self._load_files_from_paths(
                     dbx = dbx,
                     file_paths = self.file_paths

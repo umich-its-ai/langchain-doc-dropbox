@@ -15,7 +15,7 @@ You can do the install as described below, or build/run the provider dockerfile.
 
 ## Docker
 
-Edit dropbox-test.py, fill in the correct `token` and one of `folder_path`, `file_path`, or `file_paths`.
+Edit dropbox-test.py, fill in the correct `auth` and one of `folder_path`, `file_path`, or `file_paths`.
 
 Run (this also builds docker):
 
@@ -36,8 +36,15 @@ pip install -r requirements.txt
 ```python
 from dropbox_files import DropboxLoader
 
+auth = {
+  "access": "ACCESS_TOKEN_FROM_OAUTH",
+  "refresh": "REFRESH_TOKEN",
+  "id_token": "ID_TOKEN_NOT_USED",
+  "expire": "EXPIRE_TIMESTAMP"
+}
+
 loader = DropboxLoader(
-	token = "TOKEN_GOES_HERE",
+	auth = auth,
 	folder_path = "/PATH_TO_FOLDER_OR_EMPTY_STRING"
 	# file_path = "/PATH/TO_FILE/File.extension"
 	# file_paths = [
