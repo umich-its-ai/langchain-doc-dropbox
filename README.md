@@ -65,4 +65,10 @@ print(documents)
 print("\nInvalid files:\n")
 print(loader.invalid_files)
 print("")
+
+print("\nErrors:\n")
+print(loader.errors)
+print("")
 ```
+
+If errors are present, `loader.errors` will contain one list element per error. It will consist of an error message (key named `message`) and if the error pertains to a folder issue, a key named `folder`, for files a `file` key. Right now the library only catches Dropbox API specific exceptions.
