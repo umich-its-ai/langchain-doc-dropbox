@@ -33,6 +33,8 @@ pip install -r requirements.txt
 
 ## Usage example:
 
+To use a refresh token, pass in `api_key` along with `api_secret`
+
 ```python
 from dropbox_files import DropboxLoader
 
@@ -45,12 +47,14 @@ auth = {
 
 loader = DropboxLoader(
 	auth = auth,
-	folder_path = "/PATH_TO_FOLDER_OR_EMPTY_STRING"
-	# file_path = "/PATH/TO_FILE/File.extension"
+	folder_path = "/PATH_TO_FOLDER_OR_EMPTY_STRING",
+	# file_path = "/PATH/TO_FILE/File.extension",
 	# file_paths = [
 	# 	"/PATH/TO_FILE/File 1.extension",
 	# 	"/PATH/TO_FILE/File 2.extension"
-	# ]
+	# ],
+	# api_key = "API_KEY",
+	# api_secret = "API_SECRET",
 )
 
 documents = loader.load()
