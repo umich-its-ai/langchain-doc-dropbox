@@ -1,6 +1,5 @@
 langchain
 unstructured
-canvasapi
 beautifulsoup4
 lxml
 PyPDF2

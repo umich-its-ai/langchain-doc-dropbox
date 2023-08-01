@@ -1,15 +1,14 @@
 """Loads Files from Dropbox."""
 
 import tempfile
-from io import BytesIO
 from typing import List
-from datetime import date
 import pathlib
 
 from langchain.docstore.document import Document
 from langchain.document_loaders.base import BaseLoader
 from langchain.document_loaders import Docx2txtLoader
 from langchain.document_loaders import UnstructuredExcelLoader
+from langchain.document_loaders import UnstructuredPowerPointLoader
 from langchain.document_loaders import UnstructuredMarkdownLoader
 from striprtf.striprtf import rtf_to_text
 
@@ -20,6 +19,7 @@ ALLOWED_EXTENSIONS = [
     "docx",
     "xls",
     "xlsx",
+    "pptx",
     "pdf",
     "rtf",
     "txt",
@@ -66,7 +66,6 @@ class DropboxLoader(BaseLoader):
 
         self.invalid_files = []
 
-        # TODO: append exceptions to this array
         self.errors = []
 
     def _get_html_as_string(self, html) -> str:
@@ -74,11 +73,11 @@ class DropboxLoader(BaseLoader):
         try:
             # Import the html parser class
             from bs4 import BeautifulSoup
-        except ImportError:
+        except ImportError as exp:
             raise ImportError(
                 "Could not import beautifulsoup4 python package. "
                 "Please install it with `pip install beautifulsoup4`."
-            )
+            ) from exp
 
         html_string = BeautifulSoup(html, "lxml").text.strip()
 
@@ -112,11 +111,11 @@ class DropboxLoader(BaseLoader):
         try:
             # Import PDF parser class
             from PyPDF2 import PdfReader
-        except ImportError:
+        except ImportError as exp:
             raise ImportError(
                 "Could not import PyPDF2 python package. "
                 "Please install it with `pip install PyPDF2`."
-            )
+            ) from exp
 
         pdf_reader = PdfReader(download_path)
 
@@ -142,6 +141,12 @@ class DropboxLoader(BaseLoader):
 
         return docs
 
+    def _load_pptx_file(self, download_path) -> List[Document]:
+        loader = UnstructuredPowerPointLoader(download_path)
+        docs = loader.load()
+
+        return docs
+
     def _load_md_file(self, download_path) -> List[Document]:
         loader = UnstructuredMarkdownLoader(download_path)
         docs = loader.load()
@@ -163,16 +168,14 @@ class DropboxLoader(BaseLoader):
 
                 try:
                     if file_extension == "txt":
-                        file_path = file_path + 'sdvsd'
+                        file_path = file_path
 
-                    # TODO: Error handling
-                    # ex, dropbox.exceptions.ApiError: ApiError('aaf957b44ee54e59a4ceb556e0070d2e', DownloadError('path', LookupError('not_found', None)))
                     dbx.files_download_to_file(download_path=download_path, path=file_path)
 
                     if file_extension == "txt":
                         file_documents = file_documents + self._load_text_file(download_path)
 
-                    if file_extension == "htm" or file_extension == "html":
+                    if file_extension in [ "htm", "html" ]:
                         file_documents = file_documents + self._load_html_file(download_path)
 
                     elif file_extension == "pdf":
@@ -181,8 +184,11 @@ class DropboxLoader(BaseLoader):
                     elif file_extension == "docx":
                         file_documents = file_documents + self._load_docx_file(download_path)
 
-                    elif file_extension == "xlsx" or file_extension == "xls":
+                    elif file_extension in [ "xlsx", "xls" ]:
                         file_documents = file_documents + self._load_excel_file(download_path)
+
+                    elif file_extension == "pptx":
+                        file_documents = file_documents + self._load_pptx_file(download_path)
 
                     elif file_extension == "md":
                         file_documents = file_documents + self._load_md_file(download_path)
@@ -190,8 +196,8 @@ class DropboxLoader(BaseLoader):
                     elif file_extension == "rtf":
                         file_documents = file_documents + self._load_rtf_file(download_path)
 
-                except dropbox.exceptions.DropboxException as e:
-                    self.errors.append({ "message": e.error, "file": file_path })
+                except dropbox.exceptions.DropboxException as error:
+                    self.errors.append({ "message": error.error, "file": file_path })
 
         else:
             self.invalid_files.append()
@@ -209,8 +215,8 @@ class DropboxLoader(BaseLoader):
         file_paths = []
 
         try:
-            while found_all_records == False:
-                if files == None:
+            while found_all_records is False:
+                if files is None:
                     files = dbx.files_list_folder(folder_path,
                         recursive=True,
                         include_deleted=False,
@@ -228,15 +234,15 @@ class DropboxLoader(BaseLoader):
                         else:
                             self.invalid_files.append(file.path_display)
 
-                if files.has_more == False:
+                if files.has_more is False:
                     found_all_records = True
 
             file_documents = self._load_files_from_paths(
                 dbx = dbx,
                 file_paths = file_paths
             )
-        except dropbox.exceptions.DropboxException as e:
-            self.errors.append({ "message": e.error, "folder": folder_path })
+        except dropbox.exceptions.DropboxException as error:
+            self.errors.append({ "message": error.error, "folder": folder_path })
 
         return file_documents
 
@@ -256,11 +262,11 @@ class DropboxLoader(BaseLoader):
         try:
             # Import the Dropbox SDK
             import dropbox
-        except ImportError:
+        except ImportError as exp:
             raise ImportError(
                 "Could not import dropbox python package. "
                 "Please install it with `pip install dropbox`."
-            )
+            ) from exp
 
         args = {
             "oauth2_access_token": self.auth['access']
@@ -284,17 +290,18 @@ class DropboxLoader(BaseLoader):
                         dbx = dbx,
                         folder_path = self.folder_path
                     )
-                elif self.file_paths is not None:
+
+                if self.file_paths is not None:
                     return self._load_files_from_paths(
                         dbx = dbx,
                         file_paths = self.file_paths
                     )
-                else:
-                    return self._load_file(
-                        dbx = dbx,
-                        file_path = self.file_path
-                    )
-        except dropbox.exceptions.DropboxException as e:
-            self.errors.append({ "message": e.error })
+
+                return self._load_file(
+                    dbx = dbx,
+                    file_path = self.file_path
+                )
+        except dropbox.exceptions.DropboxException as error:
+            self.errors.append({ "message": error.error })
 
         return []

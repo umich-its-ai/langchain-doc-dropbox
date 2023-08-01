@@ -5,9 +5,9 @@ Features:
 Indexes Dropbox Files
 
 The following file types are supported:
-  `md` `htm` `html` `docx` `xls` `xlsx` `pdf` `rtf` `txt`
+  `md` `htm` `html` `docx` `xls` `xlsx` `pptx` `pdf` `rtf` `txt`
 
-(`doc` support would require libreoffice)
+(`doc` support would require libreoffice, so has not been implemented in this library)
 
 ## Running locally
 

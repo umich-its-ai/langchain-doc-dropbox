@@ -1,4 +1,4 @@
-from dropbox_files import DropboxLoader
+from dropbox_langchain.dropbox_files import DropboxLoader
 
 auth = {
 	"access": "ACCESS_TOKEN_FROM_OAUTH",
