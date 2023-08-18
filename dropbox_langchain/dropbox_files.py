@@ -88,7 +88,7 @@ class DropboxLoader(BaseLoader):
 
         return [Document(
             page_content=file_contents.strip(),
-            metadata={ "filename": download_path, "kind": "file" }
+            metadata={ "source": download_path, "kind": "file" }
         )]
 
     def _load_html_file(self, download_path) -> List[Document]:
@@ -96,7 +96,7 @@ class DropboxLoader(BaseLoader):
 
         return [Document(
             page_content=self._get_html_as_string(file_contents),
-            metadata={ "filename": download_path, "kind": "file" }
+            metadata={ "source": download_path, "kind": "file" }
         )]
 
     def _load_rtf_file(self, download_path) -> List[Document]:
@@ -104,7 +104,7 @@ class DropboxLoader(BaseLoader):
 
         return[Document(
             page_content=rtf_to_text(file_contents).strip(),
-            metadata={ "filename": download_path, "kind": "file" }
+            metadata={ "source": download_path, "kind": "file" }
         )]
 
     def _load_pdf_file(self, download_path) -> List[Document]:
@@ -124,7 +124,7 @@ class DropboxLoader(BaseLoader):
         for i, page in enumerate(pdf_reader.pages):
             docs.append(Document(
                 page_content=page.extract_text(),
-                metadata={ "filename": download_path, "kind": "file", "page": i }
+                metadata={ "source": download_path, "kind": "file", "page": i }
             ))
 
         return docs
