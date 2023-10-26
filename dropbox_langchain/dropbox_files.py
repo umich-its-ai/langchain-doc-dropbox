@@ -83,31 +83,32 @@ class DropboxLoader(BaseLoader):
 
         return html_string
 
-    def _load_text_file(self, download_path) -> List[Document]:
+    def _load_text_file(self, file_path, download_path) -> List[Document]:
+        filename = pathlib.Path(download_path).name
         file_contents = pathlib.Path(download_path).read_text()
 
         return [Document(
             page_content=file_contents.strip(),
-            metadata={ "source": download_path, "kind": "file" }
+            metadata={ "source": f"dropbox://{file_path}", "filename": filename, "kind": "file" }
         )]
 
-    def _load_html_file(self, download_path) -> List[Document]:
+    def _load_html_file(self, file_path, download_path) -> List[Document]:
         file_contents = pathlib.Path(download_path).read_text()
 
         return [Document(
             page_content=self._get_html_as_string(file_contents),
-            metadata={ "source": download_path, "kind": "file" }
+            metadata={ "source": f"dropbox://{file_path}", "kind": "file" }
         )]
 
-    def _load_rtf_file(self, download_path) -> List[Document]:
+    def _load_rtf_file(self, file_path, download_path) -> List[Document]:
         file_contents = pathlib.Path(download_path).read_text()
 
         return[Document(
             page_content=rtf_to_text(file_contents).strip(),
-            metadata={ "source": download_path, "kind": "file" }
+            metadata={ "source": f"dropbox://{file_path}", "kind": "file" }
         )]
 
-    def _load_pdf_file(self, download_path) -> List[Document]:
+    def _load_pdf_file(self, file_path, download_path) -> List[Document]:
         try:
             # Import PDF parser class
             from PyPDF2 import PdfReader
@@ -124,30 +125,30 @@ class DropboxLoader(BaseLoader):
         for i, page in enumerate(pdf_reader.pages):
             docs.append(Document(
                 page_content=page.extract_text(),
-                metadata={ "source": download_path, "kind": "file", "page": i }
+                metadata={ "source": f"dropbox://{file_path}", "kind": "file", "page": i+1 }
             ))
 
         return docs
 
-    def _load_docx_file(self, download_path) -> List[Document]:
+    def _load_docx_file(self, file_path, download_path) -> List[Document]:
         loader = Docx2txtLoader(download_path)
         docs = loader.load()
 
         return docs
 
-    def _load_excel_file(self, download_path) -> List[Document]:
+    def _load_excel_file(self, file_path, download_path) -> List[Document]:
         loader = UnstructuredExcelLoader(download_path)
         docs = loader.load()
 
         return docs
 
-    def _load_pptx_file(self, download_path) -> List[Document]:
+    def _load_pptx_file(self, file_path, download_path) -> List[Document]:
         loader = UnstructuredPowerPointLoader(download_path)
         docs = loader.load()
 
         return docs
 
-    def _load_md_file(self, download_path) -> List[Document]:
+    def _load_md_file(self, file_path, download_path) -> List[Document]:
         loader = UnstructuredMarkdownLoader(download_path)
         docs = loader.load()
 
@@ -167,34 +168,31 @@ class DropboxLoader(BaseLoader):
                 download_path = f"{temp_dir}/{file_name}"
 
                 try:
-                    if file_extension == "txt":
-                        file_path = file_path
-
                     dbx.files_download_to_file(download_path=download_path, path=file_path)
 
                     if file_extension == "txt":
-                        file_documents = file_documents + self._load_text_file(download_path)
+                        file_documents = file_documents + self._load_text_file(file_path, download_path)
 
                     if file_extension in [ "htm", "html" ]:
-                        file_documents = file_documents + self._load_html_file(download_path)
+                        file_documents = file_documents + self._load_html_file(file_path, download_path)
 
                     elif file_extension == "pdf":
-                        file_documents = file_documents + self._load_pdf_file(download_path)
+                        file_documents = file_documents + self._load_pdf_file(file_path, download_path)
 
                     elif file_extension == "docx":
-                        file_documents = file_documents + self._load_docx_file(download_path)
+                        file_documents = file_documents + self._load_docx_file(file_path, download_path)
 
                     elif file_extension in [ "xlsx", "xls" ]:
-                        file_documents = file_documents + self._load_excel_file(download_path)
+                        file_documents = file_documents + self._load_excel_file(file_path, download_path)
 
                     elif file_extension == "pptx":
-                        file_documents = file_documents + self._load_pptx_file(download_path)
+                        file_documents = file_documents + self._load_pptx_file(file_path, download_path)
 
                     elif file_extension == "md":
-                        file_documents = file_documents + self._load_md_file(download_path)
+                        file_documents = file_documents + self._load_md_file(file_path, download_path)
 
                     elif file_extension == "rtf":
-                        file_documents = file_documents + self._load_rtf_file(download_path)
+                        file_documents = file_documents + self._load_rtf_file(file_path, download_path)
 
                 except dropbox.exceptions.DropboxException as error:
                     self.errors.append({ "message": error.error, "file": file_path })
@@ -202,6 +200,9 @@ class DropboxLoader(BaseLoader):
         else:
             self.invalid_files.append()
 
+        # Replace null character with space
+        for doc in file_documents:
+            doc.page_content = doc.page_content.replace('\x00', ' ')
 
         return file_documents
 
