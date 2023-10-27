@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='dropbox_langchain',
-    version='0.3',
+    version='0.4',
     description='A Dropbox langchain integration',
     long_description=open('README.md').read(),
     long_description_content_type='text/markdown',
@@ -20,7 +20,7 @@ setup(
         'dropbox',
         'beautifulsoup4',
         'lxml',
-        'PyPDF2',
+        'PyPDF2[crypto]',
         'docx2txt',
         'striprtf'
     ],

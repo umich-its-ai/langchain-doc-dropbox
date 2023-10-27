@@ -2,7 +2,7 @@ langchain
 unstructured
 beautifulsoup4
 lxml
-PyPDF2
+PyPDF2[crypto]
 striprtf
 docx2txt
 dropbox

@@ -112,21 +112,25 @@ class DropboxLoader(BaseLoader):
         try:
             # Import PDF parser class
             from PyPDF2 import PdfReader
+            from PyPDF2 import errors
         except ImportError as exp:
             raise ImportError(
                 "Could not import PyPDF2 python package. "
                 "Please install it with `pip install PyPDF2`."
             ) from exp
 
-        pdf_reader = PdfReader(download_path)
-
         docs = []
 
-        for i, page in enumerate(pdf_reader.pages):
-            docs.append(Document(
-                page_content=page.extract_text(),
-                metadata={ "source": f"dropbox://{file_path}", "kind": "file", "page": i+1 }
-            ))
+        try:
+            pdf_reader = PdfReader(download_path)
+
+            for i, page in enumerate(pdf_reader.pages):
+                docs.append(Document(
+                    page_content=page.extract_text(),
+                    metadata={ "source": f"dropbox://{file_path}", "kind": "file", "page": i+1 }
+                ))
+        except errors.FileNotDecryptedError as err:
+            self.errors.append({ "message": err, "file_path": file_path })
 
         return docs
 
