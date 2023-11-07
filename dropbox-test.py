@@ -1,10 +1,9 @@
 from dropbox_langchain.dropbox_files import DropboxLoader
 
 auth = {
-	"access": "ACCESS_TOKEN_FROM_OAUTH",
-	"refresh": "REFRESH_TOKEN",
-	"id_token": "ID_TOKEN_NOT_USED",
-	"expire": "EXPIRE_TIMESTAMP"
+	"access_token": "ACCESS_TOKEN_FROM_OAUTH",
+	"refresh_token": "REFRESH_TOKEN",
+	"expires_at": "EXPIRE_TIMESTAMP"
 }
 
 loader = DropboxLoader(
