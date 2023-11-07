@@ -23,6 +23,7 @@ ALLOWED_EXTENSIONS = [
     "pdf",
     "rtf",
     "txt",
+    "paper"
 ]
 
 class DropboxLoader(BaseLoader):
@@ -138,23 +139,29 @@ class DropboxLoader(BaseLoader):
         loader = Docx2txtLoader(download_path)
         docs = loader.load()
 
-        return docs
+        return self._normalize_docs(docs, file_path)
 
     def _load_excel_file(self, file_path, download_path) -> List[Document]:
         loader = UnstructuredExcelLoader(download_path)
         docs = loader.load()
 
-        return docs
+        return self._normalize_docs(docs, file_path)
 
     def _load_pptx_file(self, file_path, download_path) -> List[Document]:
         loader = UnstructuredPowerPointLoader(download_path)
         docs = loader.load()
 
-        return docs
+        return self._normalize_docs(docs, file_path)
 
     def _load_md_file(self, file_path, download_path) -> List[Document]:
         loader = UnstructuredMarkdownLoader(download_path)
         docs = loader.load()
+        return self._normalize_docs(docs, file_path)
+
+    def _normalize_docs(self, docs, file_path) -> List[Document]:
+        for doc in docs:
+            doc.metadata['source'] = f"dropbox://{file_path}"
+            doc.metadata['kind'] = "file"
 
         return docs
 
@@ -167,39 +174,50 @@ class DropboxLoader(BaseLoader):
         file_name = pathlib.Path(file_path).stem
 
         if file_extension in ALLOWED_EXTENSIONS:
-            # Download file
-            with tempfile.TemporaryDirectory() as temp_dir:
-                download_path = f"{temp_dir}/{file_name}"
+            if file_extension == "paper":
+                # Download file
+                with tempfile.TemporaryDirectory() as temp_dir:
+                    download_path = f"{temp_dir}/{file_name}"
 
-                try:
-                    dbx.files_download_to_file(download_path=download_path, path=file_path)
-
-                    if file_extension == "txt":
-                        file_documents = file_documents + self._load_text_file(file_path, download_path)
-
-                    if file_extension in [ "htm", "html" ]:
-                        file_documents = file_documents + self._load_html_file(file_path, download_path)
-
-                    elif file_extension == "pdf":
-                        file_documents = file_documents + self._load_pdf_file(file_path, download_path)
-
-                    elif file_extension == "docx":
-                        file_documents = file_documents + self._load_docx_file(file_path, download_path)
-
-                    elif file_extension in [ "xlsx", "xls" ]:
-                        file_documents = file_documents + self._load_excel_file(file_path, download_path)
-
-                    elif file_extension == "pptx":
-                        file_documents = file_documents + self._load_pptx_file(file_path, download_path)
-
-                    elif file_extension == "md":
+                    try:
+                        dbx.files_export_to_file(download_path=download_path, path=file_path, export_format="markdown")
                         file_documents = file_documents + self._load_md_file(file_path, download_path)
+                    except dropbox.exceptions.DropboxException as error:
+                        self.errors.append({ "message": error.error, "file": file_path })
+            else:
+                # Download file
+                with tempfile.TemporaryDirectory() as temp_dir:
+                    download_path = f"{temp_dir}/{file_name}"
 
-                    elif file_extension == "rtf":
-                        file_documents = file_documents + self._load_rtf_file(file_path, download_path)
+                    try:
+                        dbx.files_download_to_file(download_path=download_path, path=file_path)
 
-                except dropbox.exceptions.DropboxException as error:
-                    self.errors.append({ "message": error.error, "file": file_path })
+                        if file_extension == "txt":
+                            file_documents = file_documents + self._load_text_file(file_path, download_path)
+
+                        if file_extension in [ "htm", "html" ]:
+                            file_documents = file_documents + self._load_html_file(file_path, download_path)
+
+                        elif file_extension == "pdf":
+                            file_documents = file_documents + self._load_pdf_file(file_path, download_path)
+
+                        elif file_extension == "docx":
+                            file_documents = file_documents + self._load_docx_file(file_path, download_path)
+
+                        elif file_extension in [ "xlsx", "xls" ]:
+                            file_documents = file_documents + self._load_excel_file(file_path, download_path)
+
+                        elif file_extension == "pptx":
+                            file_documents = file_documents + self._load_pptx_file(file_path, download_path)
+
+                        elif file_extension == "md":
+                            file_documents = file_documents + self._load_md_file(file_path, download_path)
+
+                        elif file_extension == "rtf":
+                            file_documents = file_documents + self._load_rtf_file(file_path, download_path)
+
+                    except dropbox.exceptions.DropboxException as error:
+                        self.errors.append({ "message": error.error, "file": file_path })
 
         else:
             self.invalid_files.append()
@@ -273,15 +291,25 @@ class DropboxLoader(BaseLoader):
                 "Please install it with `pip install dropbox`."
             ) from exp
 
-        args = {
-            "oauth2_access_token": self.auth['access']
-        }
+        # earlier versions of this library used `access`, but the dropbox api returns `access_token`
+        if 'access' in self.auth:
+            args = {  "oauth2_access_token": self.auth['access'] }
+
+        # preferred
+        if 'access_token' in self.auth:
+            args = {  "oauth2_access_token": self.auth['access_token'] }
 
         # If an app_key + secret is specified, pass in refresh token, app_key, app_secret
         if self.app_key is not None and self.app_secret is not None:
-            args['oauth2_refresh_token'] = self.auth['refresh']
-            args['app_key'] = self.auth['app_key']
-            args['app_secret'] = self.auth['app_secret']
+            # earlier versions of this library used `refresh`, but the dropbox api returns `refresh_token`
+            if 'refresh' in self.auth:
+                args['oauth2_refresh_token'] = self.auth['refresh']
+
+            # preferred
+            if 'refresh_token' in self.auth:
+                args['oauth2_refresh_token'] = self.auth['refresh_token']
+            args['app_key'] = self.app_key
+            args['app_secret'] = self.app_secret
 
         # Initialize a new Dropbox object
         try:
