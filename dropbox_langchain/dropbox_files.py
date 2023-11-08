@@ -3,6 +3,7 @@
 import tempfile
 from typing import List
 import pathlib
+import urllib.parse
 
 from langchain.docstore.document import Document
 from langchain.document_loaders.base import BaseLoader
@@ -84,32 +85,32 @@ class DropboxLoader(BaseLoader):
 
         return html_string
 
-    def _load_text_file(self, file_path, download_path) -> List[Document]:
+    def _load_text_file(self, file_path, download_path, source) -> List[Document]:
         filename = pathlib.Path(download_path).name
         file_contents = pathlib.Path(download_path).read_text()
 
         return [Document(
             page_content=file_contents.strip(),
-            metadata={ "source": f"dropbox://{file_path}", "filename": filename, "kind": "file" }
+            metadata={ "source": source, "filename": filename, "kind": "file" }
         )]
 
-    def _load_html_file(self, file_path, download_path) -> List[Document]:
+    def _load_html_file(self, file_path, download_path, source) -> List[Document]:
         file_contents = pathlib.Path(download_path).read_text()
 
         return [Document(
             page_content=self._get_html_as_string(file_contents),
-            metadata={ "source": f"dropbox://{file_path}", "kind": "file" }
+            metadata={ "source": source, "kind": "file" }
         )]
 
-    def _load_rtf_file(self, file_path, download_path) -> List[Document]:
+    def _load_rtf_file(self, file_path, download_path, source) -> List[Document]:
         file_contents = pathlib.Path(download_path).read_text()
 
         return[Document(
             page_content=rtf_to_text(file_contents).strip(),
-            metadata={ "source": f"dropbox://{file_path}", "kind": "file" }
+            metadata={ "source": source, "kind": "file" }
         )]
 
-    def _load_pdf_file(self, file_path, download_path) -> List[Document]:
+    def _load_pdf_file(self, file_path, download_path, source) -> List[Document]:
         try:
             # Import PDF parser class
             from PyPDF2 import PdfReader
@@ -128,39 +129,39 @@ class DropboxLoader(BaseLoader):
             for i, page in enumerate(pdf_reader.pages):
                 docs.append(Document(
                     page_content=page.extract_text(),
-                    metadata={ "source": f"dropbox://{file_path}", "kind": "file", "page": i+1 }
+                    metadata={ "source": source, "kind": "file", "page": i+1 }
                 ))
         except errors.FileNotDecryptedError as err:
             self.errors.append({ "message": err, "file_path": file_path })
 
         return docs
 
-    def _load_docx_file(self, file_path, download_path) -> List[Document]:
+    def _load_docx_file(self, file_path, download_path, source) -> List[Document]:
         loader = Docx2txtLoader(download_path)
         docs = loader.load()
 
-        return self._normalize_docs(docs, file_path)
+        return self._normalize_docs(docs, source)
 
-    def _load_excel_file(self, file_path, download_path) -> List[Document]:
+    def _load_excel_file(self, file_path, download_path, source) -> List[Document]:
         loader = UnstructuredExcelLoader(download_path)
         docs = loader.load()
 
-        return self._normalize_docs(docs, file_path)
+        return self._normalize_docs(docs, source)
 
-    def _load_pptx_file(self, file_path, download_path) -> List[Document]:
+    def _load_pptx_file(self, file_path, download_path, source) -> List[Document]:
         loader = UnstructuredPowerPointLoader(download_path)
         docs = loader.load()
 
-        return self._normalize_docs(docs, file_path)
+        return self._normalize_docs(docs, source)
 
-    def _load_md_file(self, file_path, download_path) -> List[Document]:
+    def _load_md_file(self, file_path, download_path, source) -> List[Document]:
         loader = UnstructuredMarkdownLoader(download_path)
         docs = loader.load()
-        return self._normalize_docs(docs, file_path)
+        return self._normalize_docs(docs, source)
 
-    def _normalize_docs(self, docs, file_path) -> List[Document]:
+    def _normalize_docs(self, docs, source) -> List[Document]:
         for doc in docs:
-            doc.metadata['source'] = f"dropbox://{file_path}"
+            doc.metadata['source'] = source
             doc.metadata['kind'] = "file"
 
         return docs
@@ -173,6 +174,12 @@ class DropboxLoader(BaseLoader):
         file_extension = pathlib.Path(file_path).suffix.replace('.', '')
         file_name = pathlib.Path(file_path).stem
 
+        # Calculate source link (use https and preview link format - dropbox:// protocol isn't guaranteed to work)
+        path_obj = pathlib.Path(file_path[1:])
+        folders = path_obj.parts
+        folders = '/'.join(folders[:-1])
+        source = f"https://www.dropbox.com/home/{folders}?preview={path_obj.name}"
+
         if file_extension in ALLOWED_EXTENSIONS:
             if file_extension == "paper":
                 # Download file
@@ -181,7 +188,7 @@ class DropboxLoader(BaseLoader):
 
                     try:
                         dbx.files_export_to_file(download_path=download_path, path=file_path, export_format="markdown")
-                        file_documents = file_documents + self._load_md_file(file_path, download_path)
+                        file_documents = file_documents + self._load_md_file(file_path, download_path, source)
                     except dropbox.exceptions.DropboxException as error:
                         self.errors.append({ "message": error.error, "file": file_path })
             else:
@@ -193,28 +200,28 @@ class DropboxLoader(BaseLoader):
                         dbx.files_download_to_file(download_path=download_path, path=file_path)
 
                         if file_extension == "txt":
-                            file_documents = file_documents + self._load_text_file(file_path, download_path)
+                            file_documents = file_documents + self._load_text_file(file_path, download_path, source)
 
                         if file_extension in [ "htm", "html" ]:
-                            file_documents = file_documents + self._load_html_file(file_path, download_path)
+                            file_documents = file_documents + self._load_html_file(file_path, download_path, source)
 
                         elif file_extension == "pdf":
-                            file_documents = file_documents + self._load_pdf_file(file_path, download_path)
+                            file_documents = file_documents + self._load_pdf_file(file_path, download_path, source)
 
                         elif file_extension == "docx":
-                            file_documents = file_documents + self._load_docx_file(file_path, download_path)
+                            file_documents = file_documents + self._load_docx_file(file_path, download_path, source)
 
                         elif file_extension in [ "xlsx", "xls" ]:
-                            file_documents = file_documents + self._load_excel_file(file_path, download_path)
+                            file_documents = file_documents + self._load_excel_file(file_path, download_path, source)
 
                         elif file_extension == "pptx":
-                            file_documents = file_documents + self._load_pptx_file(file_path, download_path)
+                            file_documents = file_documents + self._load_pptx_file(file_path, download_path, source)
 
                         elif file_extension == "md":
-                            file_documents = file_documents + self._load_md_file(file_path, download_path)
+                            file_documents = file_documents + self._load_md_file(file_path, download_path, source)
 
                         elif file_extension == "rtf":
-                            file_documents = file_documents + self._load_rtf_file(file_path, download_path)
+                            file_documents = file_documents + self._load_rtf_file(file_path, download_path, source)
 
                     except dropbox.exceptions.DropboxException as error:
                         self.errors.append({ "message": error.error, "file": file_path })
@@ -252,7 +259,7 @@ class DropboxLoader(BaseLoader):
                         file_extension = pathlib.Path(file.name).suffix.replace('.', '')
 
                         if file_extension in ALLOWED_EXTENSIONS:
-                            file_paths.append(file.path_lower)
+                            file_paths.append(file.path_display)
 
                         else:
                             self.invalid_files.append(file.path_display)
