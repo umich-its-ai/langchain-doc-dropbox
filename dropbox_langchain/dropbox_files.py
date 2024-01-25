@@ -132,7 +132,7 @@ class DropboxLoader(BaseLoader):
                     metadata={ "source": source, "kind": "file", "page": i+1 }
                 ))
         except errors.FileNotDecryptedError as err:
-            self.errors.append({ "message": err, "file_path": file_path })
+            self.errors.append({ "message": str(err), "file_path": file_path })
 
         return docs
 
