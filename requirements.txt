@@ -1,4 +1,5 @@
 langchain
+langchain-community
 unstructured
 beautifulsoup4
 lxml

@@ -7,10 +7,12 @@ import urllib.parse
 
 from langchain.docstore.document import Document
 from langchain.document_loaders.base import BaseLoader
-from langchain.document_loaders import Docx2txtLoader
-from langchain.document_loaders import UnstructuredExcelLoader
-from langchain.document_loaders import UnstructuredPowerPointLoader
-from langchain.document_loaders import UnstructuredMarkdownLoader
+
+from langchain_community.document_loaders import Docx2txtLoader
+from langchain_community.document_loaders import UnstructuredExcelLoader
+from langchain_community.document_loaders import UnstructuredPowerPointLoader
+from langchain_community.document_loaders import UnstructuredMarkdownLoader
+
 from striprtf.striprtf import rtf_to_text
 
 ALLOWED_EXTENSIONS = [

@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='dropbox_langchain',
-    version='0.8',
+    version='0.9',
     description='A Dropbox langchain integration',
     long_description=open('README.md').read(),
     long_description_content_type='text/markdown',
@@ -16,6 +16,7 @@ setup(
     ],
     install_requires=[
         'langchain',
+        'langchain-community',
         'unstructured',
         'dropbox',
         'beautifulsoup4',
