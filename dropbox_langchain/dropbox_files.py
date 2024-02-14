@@ -1,9 +1,10 @@
 """Loads Files from Dropbox."""
 
 import tempfile
-from typing import List
+import json
+from typing import Any, List, Literal
+from pydantic import BaseModel
 import pathlib
-import urllib.parse
 
 from langchain.docstore.document import Document
 from langchain.document_loaders.base import BaseLoader
@@ -14,6 +15,14 @@ from langchain_community.document_loaders import UnstructuredPowerPointLoader
 from langchain_community.document_loaders import UnstructuredMarkdownLoader
 
 from striprtf.striprtf import rtf_to_text
+
+import logging
+logger = logging.getLogger(__name__)
+
+ch = logging.StreamHandler()
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+ch.setFormatter(formatter)
+logger.addHandler(ch)
 
 ALLOWED_EXTENSIONS = [
     "md",
@@ -28,6 +37,21 @@ ALLOWED_EXTENSIONS = [
     "txt",
     "paper"
 ]
+
+
+class LogStatement(BaseModel):
+    """
+    INFO can be user-facing statements, non-technical and perhaps very high-level
+    """
+    message: Any
+    level: Literal['INFO', 'DEBUG', 'WARNING']
+
+    def __json__(self):
+        return {
+            'message': self.message,
+            'level': self.level,
+        }
+
 
 class DropboxLoader(BaseLoader):
     """Loading logic for Dropbox files."""
@@ -71,6 +95,7 @@ class DropboxLoader(BaseLoader):
         self.invalid_files = []
 
         self.errors = []
+        self.progress = []
 
     def _get_html_as_string(self, html) -> str:
 
@@ -107,7 +132,7 @@ class DropboxLoader(BaseLoader):
     def _load_rtf_file(self, file_path, download_path, source) -> List[Document]:
         file_contents = pathlib.Path(download_path).read_text()
 
-        return[Document(
+        return [Document(
             page_content=rtf_to_text(file_contents).strip(),
             metadata={ "source": source, "kind": "file" }
         )]
@@ -117,11 +142,12 @@ class DropboxLoader(BaseLoader):
             # Import PDF parser class
             from PyPDF2 import PdfReader
             from PyPDF2 import errors
-        except ImportError as exp:
+            from binascii import Error as binasciiError
+        except ImportError as exc:
             raise ImportError(
                 "Could not import PyPDF2 python package. "
                 "Please install it with `pip install PyPDF2`."
-            ) from exp
+            ) from exc
 
         docs = []
 
@@ -131,10 +157,17 @@ class DropboxLoader(BaseLoader):
             for i, page in enumerate(pdf_reader.pages):
                 docs.append(Document(
                     page_content=page.extract_text(),
-                    metadata={ "source": source, "kind": "file", "page": i+1 }
+                    metadata={"source": source, "kind": "file", "page": i+1}
                 ))
         except errors.FileNotDecryptedError as err:
-            self.errors.append({ "message": str(err), "file_path": file_path })
+            self._error_logger(error=f"PyPDF2.errors.FileNotDecryptedError: File has not been decrypted ({file_path})", action="read_pdf", entity_type="file")
+            self.logMessage(message={"message": {'filename': f"{file_path}", 'reason': 'not_indexed'}}, level='INFO')
+        except binasciiError as err:
+            self._error_logger(error=f"{str(err)} ({file_path})", action="read_pdf", entity_type="file")
+            self.logMessage(message={"message": {'filename': f"{file_path}", 'reason': 'not_indexed'}}, level='INFO')
+        except Exception as err:
+            self._error_logger(error=f"{str(err)} ({file_path})", action="read_pdf", entity_type="file")
+            self.logMessage(message={"message": {'filename': f"{file_path}", 'reason': 'not_indexed'}}, level='INFO')
 
         return docs
 
@@ -169,6 +202,8 @@ class DropboxLoader(BaseLoader):
         return docs
 
     def _load_file(self, dbx, file_path) -> List[Document]:
+        self.logMessage(message=f"Processing ({file_path})", level="DEBUG")
+
         import dropbox
 
         file_documents = []
@@ -192,7 +227,7 @@ class DropboxLoader(BaseLoader):
                         dbx.files_export_to_file(download_path=download_path, path=file_path, export_format="markdown")
                         file_documents = file_documents + self._load_md_file(file_path, download_path, source)
                     except dropbox.exceptions.DropboxException as error:
-                        self.errors.append({ "message": error.error, "file": file_path })
+                        self.logMessage(message={"message": error.error, "file": file_path}, level='WARNING')
             else:
                 # Download file
                 with tempfile.TemporaryDirectory() as temp_dir:
@@ -204,7 +239,7 @@ class DropboxLoader(BaseLoader):
                         if file_extension == "txt":
                             file_documents = file_documents + self._load_text_file(file_path, download_path, source)
 
-                        if file_extension in [ "htm", "html" ]:
+                        if file_extension in ["htm", "html"]:
                             file_documents = file_documents + self._load_html_file(file_path, download_path, source)
 
                         elif file_extension == "pdf":
@@ -213,7 +248,7 @@ class DropboxLoader(BaseLoader):
                         elif file_extension == "docx":
                             file_documents = file_documents + self._load_docx_file(file_path, download_path, source)
 
-                        elif file_extension in [ "xlsx", "xls" ]:
+                        elif file_extension in ["xlsx", "xls"]:
                             file_documents = file_documents + self._load_excel_file(file_path, download_path, source)
 
                         elif file_extension == "pptx":
@@ -226,7 +261,7 @@ class DropboxLoader(BaseLoader):
                             file_documents = file_documents + self._load_rtf_file(file_path, download_path, source)
 
                     except dropbox.exceptions.DropboxException as error:
-                        self.errors.append({ "message": error.error, "file": file_path })
+                        self.logMessage(message={"message": error.error, "file": file_path}, level='WARNING')
 
         else:
             self.invalid_files.append()
@@ -237,7 +272,18 @@ class DropboxLoader(BaseLoader):
 
         return file_documents
 
+    def _error_logger(self, error, action, entity_type) -> None:
+        if isinstance(error, str):
+            self.logMessage(message={"message": error, "action": action, "entity_type": entity_type}, level='WARNING')
+        elif isinstance(error.message, str):
+            message_json = json.loads(error.message)
+            self.logMessage(message={"message": message_json["errors"][0]["message"], "action": action, "entity_type": entity_type}, level='WARNING')
+        else:
+            self.logMessage(message={"message": error.message[0]["message"], "action": action, "entity_type": entity_type}, level='WARNING')
+
     def _load_files_from_folder_path(self, dbx, folder_path) -> List[Document]:
+        self.logMessage(message=f"Load files from folder path ({folder_path})", level="DEBUG")
+
         import dropbox
 
         file_documents = []
@@ -249,7 +295,8 @@ class DropboxLoader(BaseLoader):
         try:
             while found_all_records is False:
                 if files is None:
-                    files = dbx.files_list_folder(folder_path,
+                    files = dbx.files_list_folder(
+                        folder_path,
                         recursive=True,
                         include_deleted=False,
                     )
@@ -270,24 +317,44 @@ class DropboxLoader(BaseLoader):
                     found_all_records = True
 
             file_documents = self._load_files_from_paths(
-                dbx = dbx,
-                file_paths = file_paths
+                dbx=dbx,
+                file_paths=file_paths
             )
         except dropbox.exceptions.DropboxException as error:
-            self.errors.append({ "message": error.error, "folder": folder_path })
+            self.errors.append({"message": error.error, "folder": folder_path})
 
         return file_documents
 
     def _load_files_from_paths(self, dbx, file_paths) -> List[Document]:
+        self.logMessage(message=f"Load files from file paths ({', '.join(file_paths)})", level="DEBUG")
+
         file_documents = []
 
         for file_path in file_paths:
             file_documents = file_documents + self._load_file(
-                dbx = dbx,
-                file_path = file_path
+                dbx=dbx,
+                file_path=file_path
             )
 
         return file_documents
+
+    def logMessage(self, message, level):
+        if level == 'INFO':
+            logger.info(message)
+        if level == 'DEBUG':
+            logger.debug(message)
+        if level == 'WARNING':
+            logger.warning(message)
+
+            self.errors.append(LogStatement(
+                message=message,
+                level=level
+            ))
+
+        self.progress.append(LogStatement(
+            message=message,
+            level=level
+        ))
 
     def load(self) -> List[Document]:
         """Load files."""
@@ -302,11 +369,11 @@ class DropboxLoader(BaseLoader):
 
         # earlier versions of this library used `access`, but the dropbox api returns `access_token`
         if 'access' in self.auth:
-            args = {  "oauth2_access_token": self.auth['access'] }
+            args = {"oauth2_access_token": self.auth['access']}
 
         # preferred
         if 'access_token' in self.auth:
-            args = {  "oauth2_access_token": self.auth['access_token'] }
+            args = {"oauth2_access_token": self.auth['access_token']}
 
         # If an app_key + secret is specified, pass in refresh token, app_key, app_secret
         if self.app_key is not None and self.app_secret is not None:
@@ -329,21 +396,29 @@ class DropboxLoader(BaseLoader):
             ) as dbx:
                 if self.folder_path is not None:
                     return self._load_files_from_folder_path(
-                        dbx = dbx,
-                        folder_path = self.folder_path
+                        dbx=dbx,
+                        folder_path=self.folder_path
                     )
 
                 if self.file_paths is not None:
                     return self._load_files_from_paths(
-                        dbx = dbx,
-                        file_paths = self.file_paths
+                        dbx=dbx,
+                        file_paths=self.file_paths
                     )
 
                 return self._load_file(
-                    dbx = dbx,
-                    file_path = self.file_path
+                    dbx=dbx,
+                    file_path=self.file_path
                 )
         except dropbox.exceptions.DropboxException as error:
-            self.errors.append({ "message": error.error })
+            self.errors.append({"message": error.error})
 
         return []
+
+    def _filtered_statements_by_level(self, level) -> List:
+        return [statement for statement in self.progress if statement.level == level]
+
+    def get_details(self, level='INFO') -> List:
+        if level == 'INFO':
+            return self._filtered_statements_by_level(level), self.errors
+        return self.progress, self.errors

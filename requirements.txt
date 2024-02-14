@@ -4,6 +4,7 @@ unstructured
 beautifulsoup4
 lxml
 PyPDF2[crypto]
+pydantic
 striprtf
 docx2txt
 dropbox
