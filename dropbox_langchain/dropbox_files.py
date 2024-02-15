@@ -326,7 +326,7 @@ class DropboxLoader(BaseLoader):
         return file_documents
 
     def _load_files_from_paths(self, dbx, file_paths) -> List[Document]:
-        self.logMessage(message=f"Load files from file paths ({', '.join(file_paths)})", level="DEBUG")
+        self.logMessage(message=f"Load files from file paths (count: {len(file_paths)})", level="DEBUG")
 
         file_documents = []
 
