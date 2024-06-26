@@ -56,7 +56,7 @@ class LogStatement(BaseModel):
 class DropboxLoader(BaseLoader):
     """Loading logic for Dropbox files."""
 
-    def __init__(self, auth: str, app_key: str = None, app_secret: str = None, folder_path: str = None, file_paths: List = None, file_path: str = None):
+    def __init__(self, auth: dict, app_key: str = None, app_secret: str = None, folder_path: str = None, file_paths: List = None, file_path: str = None, is_team_folder: bool = False):
         """Initialize with auth.
 
         Args:
@@ -84,6 +84,7 @@ class DropboxLoader(BaseLoader):
         self.folder_path = None
         self.file_paths = None
         self.file_path = None
+        self.is_team_folder = is_team_folder
 
         if folder_path is not None:
             self.folder_path = folder_path
@@ -356,6 +357,58 @@ class DropboxLoader(BaseLoader):
             level=level
         ))
 
+    def list_folders(self, dbx, path_root=None):
+        import dropbox
+        entries_info = []
+        try:
+            headers = {"Dropbox-API-Path-Root": path_root} if path_root else {}
+            files = None
+            found_all_records = False
+
+            while not found_all_records:
+                if files is None:
+                    files = dbx.files_list_folder("", recursive=False, include_deleted=False, headers=headers)
+                else:
+                    files = dbx.files_list_folder_continue(files.cursor, headers=headers)
+
+                for entry in files.entries:
+                    if isinstance(entry, dropbox.files.FolderMetadata):
+                        entries_info.append({
+                            "name": entry.name,
+                            "path_display": entry.path_display,
+                            "parent_shared_folder_id": entry.parent_shared_folder_id if hasattr(entry, 'parent_shared_folder_id') else None
+                        })
+                if not files.has_more:
+                    found_all_records = True
+
+        except dropbox.exceptions.DropboxException as error:
+            print(f"DropboxException: {error.error}")
+        return entries_info
+
+    def get_folders(self):
+        import dropbox
+        try:
+            with dropbox.Dropbox(oauth2_access_token=self.auth['access_token']) as dbx:
+                account_info = dbx.users_get_current_account()
+                root_namespace_id = account_info.root_info.root_namespace_id
+                print(f"Root Namespace ID: {root_namespace_id}")
+
+                root_entries_info = self.list_folders(dbx, json.dumps({
+                    ".tag": "namespace_id",
+                    "namespace_id": root_namespace_id
+                }))
+                print("Root level entries info with namespace id:", root_entries_info)
+
+                personal_entries_info = self.list_folders(dbx)
+                print("Personal level entries info:", personal_entries_info)
+
+                all_entries_info = root_entries_info + personal_entries_info
+
+                return all_entries_info
+        except dropbox.exceptions.DropboxException as error:
+            print(f"DropboxException: {error.error}")
+            return []
+
     def load(self) -> List[Document]:
         """Load files."""
         try:
@@ -389,27 +442,45 @@ class DropboxLoader(BaseLoader):
 
         # Initialize a new Dropbox object
         try:
-            with dropbox.Dropbox(
-                **args
-                # =self.token[''],
-                # oauth2_access_token_expiration=self.token['expire'],
-            ) as dbx:
-                if self.folder_path is not None:
-                    return self._load_files_from_folder_path(
-                        dbx=dbx,
-                        folder_path=self.folder_path
-                    )
+            dbx_personal = dropbox.Dropbox(**args)
+            account_info = dbx_personal.users_get_current_account()
+        except dropbox.exceptions.DropboxException as error:
+            self.errors.append({"message": error.error})
+            return []
 
-                if self.file_paths is not None:
-                    return self._load_files_from_paths(
-                        dbx=dbx,
-                        file_paths=self.file_paths
-                    )
+        # Initialize a new Dropbox object for team folders with the appropriate headers
+        try:
+            headers = {
+                "Dropbox-API-Path-Root": json.dumps({
+                    ".tag": "namespace_id",
+                    "namespace_id": account_info.root_info.root_namespace_id
+                })
+            }
+            dbx_team = dropbox.Dropbox(oauth2_access_token=self.auth['access_token'], headers=headers)
+        except dropbox.exceptions.DropboxException as error:
+            self.errors.append({"message": error.error})
+            return []
 
-                return self._load_file(
+        # Use the appropriate Dropbox client based on the folder type
+        dbx = dbx_team if self.is_team_folder else dbx_personal
+
+        try:
+            if self.folder_path is not None:
+                return self._load_files_from_folder_path(
                     dbx=dbx,
-                    file_path=self.file_path
+                    folder_path=self.folder_path
                 )
+
+            if self.file_paths is not None:
+                return self._load_files_from_paths(
+                    dbx=dbx,
+                    file_paths=self.file_paths
+                )
+
+            return self._load_file(
+                dbx=dbx,
+                file_path=self.file_path
+            )
         except dropbox.exceptions.DropboxException as error:
             self.errors.append({"message": error.error})
 
