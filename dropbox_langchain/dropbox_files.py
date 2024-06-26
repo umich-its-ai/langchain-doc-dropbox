@@ -391,16 +391,13 @@ class DropboxLoader(BaseLoader):
             with dropbox.Dropbox(oauth2_access_token=self.auth['access_token']) as dbx:
                 account_info = dbx.users_get_current_account()
                 root_namespace_id = account_info.root_info.root_namespace_id
-                print(f"Root Namespace ID: {root_namespace_id}")
 
                 root_entries_info = self.list_folders(dbx, json.dumps({
                     ".tag": "namespace_id",
                     "namespace_id": root_namespace_id
                 }))
-                print("Root level entries info with namespace id:", root_entries_info)
 
                 personal_entries_info = self.list_folders(dbx)
-                print("Personal level entries info:", personal_entries_info)
 
                 all_entries_info = root_entries_info + personal_entries_info
 
