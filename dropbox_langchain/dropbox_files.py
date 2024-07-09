@@ -228,7 +228,7 @@ class DropboxLoader(BaseLoader):
                         dbx.files_export_to_file(download_path=download_path, path=file_path, export_format="markdown")
                         file_documents = file_documents + self._load_md_file(file_path, download_path, source)
                     except dropbox.exceptions.DropboxException as error:
-                        self.logMessage(message={"message": error.error, "file": file_path}, level='WARNING')
+                        self.logMessage(message={"message": error, "file": file_path}, level='WARNING')
             else:
                 # Download file
                 with tempfile.TemporaryDirectory() as temp_dir:
@@ -262,7 +262,7 @@ class DropboxLoader(BaseLoader):
                             file_documents = file_documents + self._load_rtf_file(file_path, download_path, source)
 
                     except dropbox.exceptions.DropboxException as error:
-                        self.logMessage(message={"message": error.error, "file": file_path}, level='WARNING')
+                        self.logMessage(message={"message": error, "file": file_path}, level='WARNING')
 
         else:
             self.invalid_files.append()
@@ -322,7 +322,7 @@ class DropboxLoader(BaseLoader):
                 file_paths=file_paths
             )
         except dropbox.exceptions.DropboxException as error:
-            self.errors.append({"message": error.error, "folder": folder_path})
+            self.errors.append({"message": error, "folder": folder_path})
 
         return file_documents
 
@@ -357,19 +357,19 @@ class DropboxLoader(BaseLoader):
             level=level
         ))
 
-    def list_folders(self, dbx, path_root=None):
+    def list_folders(self, dbx, root_namespace_id=None):
         import dropbox
         entries_info = []
         try:
-            headers = {"Dropbox-API-Path-Root": path_root} if path_root else {}
             files = None
             found_all_records = False
+            dbx = dbx.with_path_root(dropbox.common.PathRoot.root(root_namespace_id)) if root_namespace_id else dbx
 
             while not found_all_records:
                 if files is None:
-                    files = dbx.files_list_folder("", recursive=False, include_deleted=False, headers=headers)
+                    files = dbx.files_list_folder("", recursive=False, include_deleted=False)
                 else:
-                    files = dbx.files_list_folder_continue(files.cursor, headers=headers)
+                    files = dbx.files_list_folder_continue(files.cursor)
 
                 for entry in files.entries:
                     if isinstance(entry, dropbox.files.FolderMetadata):
@@ -382,7 +382,7 @@ class DropboxLoader(BaseLoader):
                     found_all_records = True
 
         except dropbox.exceptions.DropboxException as error:
-            print(f"DropboxException: {error.error}")
+            self.errors.append({"message": error})
         return entries_info
 
     def get_folders(self):
@@ -392,18 +392,13 @@ class DropboxLoader(BaseLoader):
                 account_info = dbx.users_get_current_account()
                 root_namespace_id = account_info.root_info.root_namespace_id
 
-                root_entries_info = self.list_folders(dbx, json.dumps({
-                    ".tag": "namespace_id",
-                    "namespace_id": root_namespace_id
-                }))
-
+                root_entries_info = self.list_folders(dbx, root_namespace_id)
                 personal_entries_info = self.list_folders(dbx)
-
                 all_entries_info = root_entries_info + personal_entries_info
 
                 return all_entries_info
         except dropbox.exceptions.DropboxException as error:
-            print(f"DropboxException: {error.error}")
+            self.errors.append({"message": error})
             return []
 
     def load(self) -> List[Document]:
@@ -442,7 +437,7 @@ class DropboxLoader(BaseLoader):
             dbx_personal = dropbox.Dropbox(**args)
             account_info = dbx_personal.users_get_current_account()
         except dropbox.exceptions.DropboxException as error:
-            self.errors.append({"message": error.error})
+            self.errors.append({"message": error})
             return []
 
         # Initialize a new Dropbox object for team folders with the appropriate headers
@@ -455,7 +450,7 @@ class DropboxLoader(BaseLoader):
             }
             dbx_team = dropbox.Dropbox(oauth2_access_token=self.auth['access_token'], headers=headers)
         except dropbox.exceptions.DropboxException as error:
-            self.errors.append({"message": error.error})
+            self.errors.append({"message": error})
             return []
 
         # Use the appropriate Dropbox client based on the folder type
@@ -465,13 +460,13 @@ class DropboxLoader(BaseLoader):
             if self.folder_path is not None:
                 return self._load_files_from_folder_path(
                     dbx=dbx,
-                    folder_path=self.folder_path
+                    folder_path=self.folder_path,
                 )
 
             if self.file_paths is not None:
                 return self._load_files_from_paths(
                     dbx=dbx,
-                    file_paths=self.file_paths
+                    file_paths=self.file_paths,
                 )
 
             return self._load_file(
@@ -479,7 +474,7 @@ class DropboxLoader(BaseLoader):
                 file_path=self.file_path
             )
         except dropbox.exceptions.DropboxException as error:
-            self.errors.append({"message": error.error})
+            self.errors.append({"message": error})
 
         return []
 
