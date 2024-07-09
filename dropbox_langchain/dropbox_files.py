@@ -282,8 +282,8 @@ class DropboxLoader(BaseLoader):
         else:
             self.logMessage(message={"message": error.message[0]["message"], "action": action, "entity_type": entity_type}, level='WARNING')
 
-    def _load_files_from_folder_path(self, dbx, folder_path, dbx_type) -> List[Document]:
-        self.logMessage(message=f"Load files from folder path ({folder_path}), which is of type {dbx_type}", level="DEBUG")
+    def _load_files_from_folder_path(self, dbx, folder_path) -> List[Document]:
+        self.logMessage(message=f"Load files from folder path ({folder_path})", level="DEBUG")
 
         import dropbox
 
@@ -461,7 +461,6 @@ class DropboxLoader(BaseLoader):
                 return self._load_files_from_folder_path(
                     dbx=dbx,
                     folder_path=self.folder_path,
-                    dbx_type="team" if self.is_team_folder else "personal"
                 )
 
             if self.file_paths is not None:
