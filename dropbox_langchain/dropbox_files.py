@@ -395,14 +395,16 @@ class DropboxLoader(BaseLoader):
     def logMessage(self, message, level):
         if level == "INFO":
             logger.info(message)
-        if level == "DEBUG":
+        elif level == "DEBUG":
             logger.debug(message)
-        if level == "WARNING":
+        elif level == "WARNING":
             logger.warning(message)
             self.warnings.append(LogStatement(message=message, level=level))
-        if level == "ERROR":
+        elif level == "ERROR":
             logger.error(message)
             self.errors.append(LogStatement(message=message, level=level))
+        else:
+            logger.debug(f"Unknown log level: {level}, message: {message}")
 
         self.progress.append(LogStatement(message=message, level=level))
 
