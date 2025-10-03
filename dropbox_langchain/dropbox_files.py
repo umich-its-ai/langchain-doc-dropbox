@@ -519,7 +519,12 @@ class DropboxLoader(BaseLoader):
                 message=f"Error connecting to Dropbox: {str(error)}", level="ERROR"
             )
             raise
-
+        except Exception as error:
+            self.logMessage(
+                message=f"Unknown error connecting to Dropbox: {str(error)}",
+                level="ERROR",
+            )
+            raise
         # Initialize a new Dropbox object for team folders with the appropriate headers
         try:
             headers = {
@@ -536,6 +541,12 @@ class DropboxLoader(BaseLoader):
         except dropbox.exceptions.DropboxException as error:
             self.logMessage(
                 message=f"Error connecting to Dropbox team folder: {str(error)}",
+                level="ERROR",
+            )
+            raise
+        except Exception as error:
+            self.logMessage(
+                message=f"Unknown error connecting to Dropbox team folder: {str(error)}",
                 level="ERROR",
             )
             raise
@@ -560,8 +571,11 @@ class DropboxLoader(BaseLoader):
         except dropbox.exceptions.DropboxException as error:
             self.logMessage(message=f"Error loading files: {str(error)}", level="ERROR")
             raise
-
-        return []
+        except Exception as error:
+            self.logMessage(
+                message=f"Unknown error loading files: {str(error)}", level="ERROR"
+            )
+            raise
 
     def _filtered_statements_by_level(self, level) -> List:
         return [statement for statement in self.progress if statement.level == level]
