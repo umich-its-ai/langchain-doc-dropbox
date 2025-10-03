@@ -568,9 +568,6 @@ class DropboxLoader(BaseLoader):
                 )
 
             return self._load_file(dbx=dbx, file_path=self.file_path)
-        except dropbox.exceptions.DropboxException as error:
-            self.logMessage(message=f"Error loading files: {str(error)}", level="ERROR")
-            raise
         except Exception as error:
             self.logMessage(
                 message=f"Unknown error loading files: {str(error)}", level="ERROR"
