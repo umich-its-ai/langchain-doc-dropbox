@@ -23,7 +23,7 @@ ch = logging.StreamHandler()
 formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 ch.setFormatter(formatter)
 logger.addHandler(ch)
-
+LogLevel = Literal["INFO", "DEBUG", "WARNING", "ERROR"]
 ALLOWED_EXTENSIONS = [
     "md",
     "htm",
@@ -392,7 +392,7 @@ class DropboxLoader(BaseLoader):
 
         return file_documents
 
-    def logMessage(self, message, level):
+    def logMessage(self, message, level: LogLevel = "INFO"):
         if level == "INFO":
             logger.info(message)
         elif level == "DEBUG":
@@ -577,10 +577,10 @@ class DropboxLoader(BaseLoader):
             )
             raise
 
-    def _filtered_statements_by_level(self, level) -> List:
+    def _filtered_statements_by_level(self, level: LogLevel) -> List:
         return [statement for statement in self.progress if statement.level == level]
 
-    def get_details(self, level="INFO") -> Tuple:
+    def get_details(self, level: LogLevel = "INFO") -> Tuple:
         if level == "INFO":
             return self._filtered_statements_by_level(level), self.warnings, self.errors
         return self.progress, self.warnings, self.errors
