@@ -12,7 +12,7 @@ def load_requirements(path: str) -> list[str]:
 
 setup(
     name="dropbox_langchain",
-    version="0.12.0",
+    version="0.13.0",
     description="A Dropbox langchain integration",
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",
