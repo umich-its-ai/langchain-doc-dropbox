@@ -1,5 +1,5 @@
-langchain
-langchain-community
+langchain>=1.2.0,<2.0.0
+langchain-community>=0.4.1,<1.0.0
 unstructured
 beautifulsoup4
 lxml

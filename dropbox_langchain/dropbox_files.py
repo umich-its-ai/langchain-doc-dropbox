@@ -6,8 +6,8 @@ import pathlib
 import tempfile
 from typing import Any, List, Literal, Tuple
 
-from langchain.docstore.document import Document
-from langchain.document_loaders.base import BaseLoader
+from langchain_classic.docstore.document import Document
+from langchain_classic.document_loaders.base import BaseLoader
 from langchain_community.document_loaders import (
     Docx2txtLoader,
     UnstructuredExcelLoader,
@@ -110,7 +110,6 @@ class DropboxLoader(BaseLoader):
         self.progress = []
 
     def _get_html_as_string(self, html) -> str:
-
         try:
             # Import the html parser class
             from bs4 import BeautifulSoup
